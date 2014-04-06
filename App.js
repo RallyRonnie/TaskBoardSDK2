@@ -1,0 +1,99 @@
+Ext.define('CustomApp', {
+    extend: 'Rally.app.App',
+    componentCls: 'app',
+    launch: function() {
+		this.suser = '';
+		var filters = [];
+		var itfilter=null;
+		var newfilter=null;
+		var userfilter = null;
+		var timeboxScope = this.getContext().getTimeboxScope();
+		if(timeboxScope) {
+			filters.push(timeboxScope.getQueryFilter());
+			itfilter = timeboxScope.getQueryFilter();
+		}
+		this.userpicker = this.add({
+			xtype: 'rallyusersearchcombobox',
+			fieldLabel: 'Filter on User:',
+			project: '/project/__PROJECT_OID__',
+			listeners:{
+				change: function(combobox){
+					timeboxScope = this.getContext().getTimeboxScope();
+					if(timeboxScope) {
+						itfilter = timeboxScope.getQueryFilter();
+					}
+					this.suser = combobox.getRecord().get('UserName');
+					if (this.suser === '') {
+						userfilter =  null;
+						newfilter = itfilter;
+					} else {
+						userfilter = Ext.create('Rally.data.QueryFilter', {
+							property: 'Owner.UserName',
+							operator: '=',
+							value: this.suser
+						});
+						newfilter = itfilter.and(userfilter);
+					}
+					this.taskboard.refresh({
+						storeConfig: {
+							filters: [
+								newfilter
+							]
+						}
+					});
+				},
+				scope: this
+			}
+		});
+		this.taskboard = this.add({
+			xtype: 'rallycardboard',
+			types: 'Task',
+			attribute: 'State',
+			listeners:{
+				beforecarddroppedsave:function(cardboard, card) {
+					//map the new state from on this card to the new state
+					var newState = card.record.get(this.State);
+					if (newState == 'Complete') {
+						card.record.set(this.ToDo, 0.0);
+					}
+				},
+				scope:this
+			},
+			cardConfig: {
+				fields: ['ToDo', 'TimeSpent', 'Estimate','WorkProduct'],
+				editable: true,
+				enableValidationUi: true,
+				showIconMenus: true,
+				showBlockedReason: true
+			},
+			storeConfig: {
+				filters: filters,
+				sorters: [
+					{ property: 'WorkProduct', direction: 'DESC' }
+				]
+			},
+			scope: this
+		});
+	},
+	onTimeboxScopeChange: function(newTimeboxScope) {
+		if (this.suser === '') {
+			newfilter = newTimeboxScope.getQueryFilter();
+		} else {
+			userfilter = Ext.create('Rally.data.QueryFilter', {
+				property: 'Owner.UserName',
+				operator: '=',
+				value: this.suser
+			});
+			newfilter = newTimeboxScope.getQueryFilter().and(userfilter);
+		}
+		this.callParent(arguments);
+		this.taskboard.refresh({
+			storeConfig: {
+				filters: [
+					newfilter
+				]
+			}
+		});
+	}
+
+});
